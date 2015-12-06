@@ -1,7 +1,7 @@
 package addonOsu;
 
 public enum OsuMode {
-	OSU(0), TAIKO(1), CTB(2), MANIA(3);
+	OSU(0), TAIKO(1), FRUIT(2), MANIA(3);
 	
 	private int modeNumber;
 	

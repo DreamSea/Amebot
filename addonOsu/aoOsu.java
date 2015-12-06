@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Scanner;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import base.AddOn;
 import base.AmeBot;
@@ -39,15 +41,19 @@ public class aoOsu implements AddOn
     Random r = new Random();
     int[] test = new int[5];
     Map<Integer,OsuSong> songsByID = new HashMap<Integer, OsuSong>();
-    List<List<OsuSong>> songsByMode = new ArrayList<List<OsuSong>>();
+    Map<String, List<OsuSong>> beatmapsByMode = new HashMap <String, List<OsuSong>>();
     private diffComparator difficulty = new diffComparator();
 
     public aoOsu(String channel, MessageSender messageSender, String botName)
     {
-        for (int i = 0; i < 4; i++)
-        {
-            songsByMode.add(new ArrayList<OsuSong>());
-        }
+    	beatmapsByMode.put("osu", new ArrayList<OsuSong>());
+    	beatmapsByMode.put("taiko", new ArrayList<OsuSong>());
+    	beatmapsByMode.put("fruit", new ArrayList<OsuSong>());
+    	beatmapsByMode.put("mania", new ArrayList<OsuSong>());
+    	for (int keys = 1; keys <= 10; keys++) {
+    		beatmapsByMode.put("mania"+keys+"k", new ArrayList<OsuSong>());
+    	}
+    	//System.out.println(beatmapsByMode.keySet());
 
         this.channel = channel;
         this.messageSender = messageSender;
@@ -67,36 +73,38 @@ public class aoOsu implements AddOn
             e1.printStackTrace();
         }
 
-        // third file is bogus
-        String[] songFiles = {"taikoSongs.txt", "osuSongs.txt", "maniaSongs.txt", "maniaSongs.txt"};
+        
+        String songFile = "beatmaps_2015-11-24";
 
         try
         {
-            for (int i = 0; i < songFiles.length; i++)
+            File f = new File(songFile);
+            BufferedReader br = new BufferedReader(new FileReader(f));
+            String nextLine = br.readLine();
+            while (nextLine != null)
             {
-                File f = new File(songFiles[i]);
-                BufferedReader br = new BufferedReader(new FileReader(f));
-                String nextLine = br.readLine();
-                while (nextLine != null)
+                OsuSong current = new OsuSong(nextLine);
+                if (!songsByID.containsKey(current.getBeatmap_id()))
                 {
-                    OsuSong current = new OsuSong(nextLine);
-                    if (!songsByID.containsKey(current.getBeatmapID()))
-                    {
-                        songsByID.put(current.getBeatmapID(), current);
-                        songsByMode.get(current.getMode()).add(current);
+                    songsByID.put(current.getBeatmap_id(), current);
+                    OsuMode currentMode = OsuMode.getMode(current.getMode());
+                    //System.out.println(currentMode.toString().toLowerCase());
+                    beatmapsByMode.get(currentMode.toString().toLowerCase()).add(current);
+                    if (currentMode == OsuMode.MANIA) {
+                    	int numKeys = (int) current.getDiff_size();
+                    	//System.out.println(current);
+                    	//System.out.println("mania"+numKeys+"k");
+                        beatmapsByMode.get("mania"+numKeys+"k").add(current);
                     }
-                    nextLine = br.readLine();
                 }
-                br.close();
+                nextLine = br.readLine();
             }
+            br.close();
 
-            for (List<OsuSong> types : songsByMode)
+            for (String osuMode : beatmapsByMode.keySet())
             {
-                Collections.sort(types, difficulty);
-            }
-            for (int i = 0; i < 4; i++)
-            {
-                System.out.println("Mode "+i+": "+songsByMode.get(i).size()+" songs loaded");
+                Collections.sort(beatmapsByMode.get(osuMode), difficulty);
+                System.out.println("Mode "+osuMode+": "+beatmapsByMode.get(osuMode).size()+" beatmaps loaded");
             }
         }
         catch (FileNotFoundException e)
@@ -109,9 +117,9 @@ public class aoOsu implements AddOn
 		}
     }
 
-    public int search(double diff, double margin, int mode)
+    public int search(double diff, double margin, String mode)
     {   
-        List<OsuSong> type = songsByMode.get(mode);
+        List<OsuSong> type = beatmapsByMode.get(mode);
         boolean startFound = false;
         int startIndex = type.size()-1;
         int endIndex = type.size()-1;
@@ -119,7 +127,7 @@ public class aoOsu implements AddOn
         {
             if (!startFound)
             {
-                if (type.get(i).getDifficultyRating() >= diff - margin)
+                if (type.get(i).getDifficultyrating() >= diff - margin)
                 {
                     startIndex = i;
                     startFound = true;
@@ -127,7 +135,7 @@ public class aoOsu implements AddOn
             }
             if (startFound)
             {
-                if (type.get(i).getDifficultyRating() >= diff + margin)
+                if (type.get(i).getDifficultyrating() >= diff + margin)
                 {
                     endIndex = i;
                     break;
@@ -142,18 +150,18 @@ public class aoOsu implements AddOn
         return index;
     }
 
-    public int rangeDiff(double lower, double upper, int mode)
+    public int rangeDiff(double lower, double upper, String mode)
     {
-        List<OsuSong> type = songsByMode.get(mode);
+        List<OsuSong> type = beatmapsByMode.get(mode);
         int count = 0;
         boolean lowerFound = false;
         for (int i = 0; i < type.size(); i++)
         {
-            if (!lowerFound && type.get(i).getDifficultyRating() >= lower)
+            if (!lowerFound && type.get(i).getDifficultyrating() >= lower)
             {
                 lowerFound = true;
             }
-            if (type.get(i).getDifficultyRating() > upper)
+            if (type.get(i).getDifficultyrating() > upper)
             {
                 break;
             }
@@ -168,7 +176,7 @@ public class aoOsu implements AddOn
         return selected.toString()+" ["+selected.getLink()+"]";
     }
 
-	private void modeFind(String[] trailing, int mode) {
+	private void modeFind(String[] trailing, String mode) {
 		if (trailing.length == 1)
 			return;
 		try {
@@ -183,14 +191,14 @@ public class aoOsu implements AddOn
 				}
 			}
 			int index = search(diff, margin, mode);
-			messageSender.sendMessage(channel, mapString(songsByMode.get(mode)
-					.get(index).getBeatmapID()));
+			messageSender.sendMessage(channel, mapString(beatmapsByMode.get(mode)
+					.get(index).getBeatmap_id()));
 		} catch (NumberFormatException e) {
 			System.out.println("nope: " + trailing[1]);
 		}
 	}
 	
-	private void modeCount(String[] trailing, int mode, String modeName) {
+	private void modeCount(String[] trailing, String mode, String modeName) {
         if (trailing.length < 3) return;
         try
         {
@@ -220,7 +228,17 @@ public class aoOsu implements AddOn
 		apiThrottle = System.currentTimeMillis();
 		
 		String user = trailing[1];
-		double diff = getDiff(user, mode);
+		double diff;
+		int count;
+		if (OsuMode.getMode(mode) == OsuMode.MANIA && modeName.length() != 5) {
+			double[] results = getDiff(user, mode, Integer.parseInt(modeName.substring(5, 6)));
+			diff = results[0];
+			count = (int) results[1];
+		} else {
+			double[] results = getDiff(user, mode, -1);
+			diff = results[0];
+			count = (int) results[1];
+		}
 		
 		if (diff == Double.MIN_VALUE)
 		{
@@ -228,36 +246,43 @@ public class aoOsu implements AddOn
 		    return;
 		}
 		
-		String recDiff = "Recommended "+modeName+" difficulty for "+user+": "+df.format(diff);
+		String recDiff = "Recommended "+modeName+" difficulty for "+user+" based on "+count+" score(s): "+df.format(diff);
 		messageSender.sendMessage(channel, recDiff);
 	}
     
+	Pattern modeFind = Pattern.compile("_(.*)find");
+	Pattern modeCount = Pattern.compile("_(.*)count");
+	Pattern modeDiff = Pattern.compile("_(.*)diff");
+	
     @Override
     public void checkMessage(String[] message)
     {
         String[] trailing = message[3].split("[ ]+");
-		if (trailing[0].equalsIgnoreCase("_taikofind")) {
-			modeFind(trailing, 1);
-		} else if (trailing[0].equalsIgnoreCase("_osufind")) {
-			modeFind(trailing, 0);
-		} else if (trailing[0].equalsIgnoreCase("_maniafind")) {
-			modeFind(trailing, 3);
-		}  else if (trailing[0].equalsIgnoreCase("_taikocount")) {
-			modeCount(trailing, 1, "Taiko");
-		} else if (trailing[0].equalsIgnoreCase("_osucount")) {
-			modeCount(trailing, 0, "Osu");
-		} else if (trailing[0].equalsIgnoreCase("_maniacount")) {
-			modeCount(trailing, 3, "Mania");
-		} else if (trailing[0].equalsIgnoreCase("_taikodiff")) {
-			modeDiff(trailing, 1, "taiko");
-		} else if (trailing[0].equalsIgnoreCase("_osudiff")) {
-			modeDiff(trailing, 0, "osu");
-		} else if (trailing[0].equalsIgnoreCase("_maniadiff")) {
-			modeDiff(trailing, 3, "mania");
-		} else if (trailing[0].startsWith("_") 
-				&& trailing[0].toLowerCase().endsWith("find")) {
-			messageSender.sendMessage(channel, "what scene");
-		}
+        Matcher m = modeFind.matcher(trailing[0]);
+        if (m.find() && beatmapsByMode.containsKey(m.group(1).toLowerCase())) {
+        	modeFind(trailing, m.group(1).toLowerCase());
+        } else {
+        	m = modeDiff.matcher(trailing[0]);
+        	if (m.find() && beatmapsByMode.containsKey(m.group(1).toLowerCase())) {
+        		if (m.group(1).equalsIgnoreCase("osu")) {
+            		modeDiff(trailing, OsuMode.OSU.getModeNumber(), m.group(1));
+        		} else if (m.group(1).equalsIgnoreCase("taiko")) {
+            		modeDiff(trailing, OsuMode.TAIKO.getModeNumber(), m.group(1));
+        		} else if (m.group(1).equalsIgnoreCase("fruit")) {
+            		modeDiff(trailing, OsuMode.FRUIT.getModeNumber(), m.group(1));
+        		} else {
+            		modeDiff(trailing, OsuMode.MANIA.getModeNumber(), m.group(1));
+        		}
+        	} else {
+        		m = modeCount.matcher(trailing[0]);
+        		if (m.find() && beatmapsByMode.containsKey(m.group(1).toLowerCase())) {
+        			modeCount(trailing, m.group(1).toLowerCase(), m.group(1));
+        		} else if (trailing[0].startsWith("_") 
+        				&& trailing[0].toLowerCase().endsWith("find")) {
+        			messageSender.sendMessage(channel, "what scene");
+        		}
+        	}
+        }
     }
 
     class diffComparator implements Comparator<OsuSong>
@@ -266,16 +291,17 @@ public class aoOsu implements AddOn
         @Override
         public int compare(OsuSong o1, OsuSong o2)
         {
-            double diff = o1.getDifficultyRating() - o2.getDifficultyRating();
+            double diff = o1.getDifficultyrating() - o2.getDifficultyrating();
             if (diff > 0) return 1;
             else if (diff < 0) return -1;
             else return 0;
         }
     }
 
-    public double getDiff(String username, int mode)
+    public double[] getDiff(String username, int mode, int numKeys)
     {
 
+    	double[] toReturn = new double[2];
         URL url;
         try
         {
@@ -288,7 +314,8 @@ public class aoOsu implements AddOn
             
             if (toParse.length() < 10)
             {
-                return Double.MIN_VALUE;
+            	toReturn[0] = Double.MIN_VALUE;
+                return toReturn;
             }
             
             String trim = toParse.substring(2, toParse.length()-2);
@@ -307,7 +334,13 @@ public class aoOsu implements AddOn
             {
                 if (o.getenabled_mods() == 0 && songsByID.containsKey(o.getbeatmap_id()))
                 {
-                    counted.add(o);
+                	if (numKeys > 0) {
+                		if (((int) songsByID.get(o.getbeatmap_id()).getDiff_size()) == numKeys) {
+                			counted.add(o);
+                		}
+                	} else {
+                        counted.add(o);
+                	}
                 }
             }
 
@@ -325,7 +358,7 @@ public class aoOsu implements AddOn
             {
                 //System.out.println();
                 OsuSong song = songsByID.get(o.getbeatmap_id());
-                double diff = song.getDifficultyRating();
+                double diff = song.getDifficultyrating();
                 double acc = o.getAcc(song.getMode());
                 double skew = 0.5*(acc-0.9)/0.1;
 
@@ -334,7 +367,9 @@ public class aoOsu implements AddOn
 
                 recDiff += (diff+skew)*o.getpp()/ppSum;
             }
-            return recDiff;
+            toReturn[0] = recDiff;
+            toReturn[1] = counted.size();
+            return toReturn;
         }
         catch (MalformedURLException e)
         {
@@ -346,6 +381,6 @@ public class aoOsu implements AddOn
             // TODO Auto-generated catch block
             e.printStackTrace();
         }
-        return 0;
+        return toReturn;
     }
 }
