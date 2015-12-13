@@ -333,5 +333,13 @@ public class OsuSong
         return "https://osu.ppy.sh/b/"+getBeatmap_id()+"?m="+getMode();
     }
     
+    public static OsuSong getManiaMarker() {
+    	OsuSong toReturn = new OsuSong("");
+    	toReturn.setMode(3);			// indicate mania
+    	toReturn.setDiff_size(-1);		// marker for 'all mania'
+    	toReturn.setBeatmap_id(-1);		// no set collision
+    	toReturn.setBeatmapset_id(-1);	// no set collision
+    	return toReturn;
+    }
     
 }

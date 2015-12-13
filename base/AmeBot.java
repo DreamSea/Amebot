@@ -6,7 +6,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.net.MalformedURLException;
 import java.net.Socket;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -19,6 +21,7 @@ import addonMisc.aoBansonRune;
 import addonMisc.aoHanninParty;
 import addonMisc.aoHi;
 import addonMisc.aoSokuBet;
+import addonOsu.OsuScore;
 import addonOsu.aoOsu;
 
 //<<< :DreamSea!~DreamSea@limited.blade.works PRIVMSG Amebot :gg			/msg Amebot gg
@@ -28,7 +31,7 @@ import addonOsu.aoOsu;
 //<<< :DreamSea_!~DreamSea@limited.blade.works NICK :DreamSea
 
 
-public class AmeBot implements MessageSender {
+public class AmeBot implements MessageSender, ApiConnection {
 
 	private String nick;
 	private String user;
@@ -171,7 +174,7 @@ public class AmeBot implements MessageSender {
                          if (message[3].equals(".install osu"))
                          {
                              String osuInfo = "osu "+message[2];
-                             addonsPool.put(osuInfo, new aoOsu(message[2], this, nick));
+                             addonsPool.put(osuInfo, new aoOsu(message[2], this, this, nick));
                              addons.add(addonsPool.get(osuInfo));
                          }
                          else
@@ -180,7 +183,7 @@ public class AmeBot implements MessageSender {
                              if (channels.contains(channelInfo))
                              {
                                  String osuInfo = "osu "+channelInfo;    //skip hashmark
-                                 addonsPool.put(osuInfo, new aoOsu(channelInfo, this, nick));
+                                 addonsPool.put(osuInfo, new aoOsu(channelInfo, this, this, nick));
                                  addons.add(addonsPool.get(osuInfo));
                              }
                          }
@@ -328,6 +331,31 @@ public class AmeBot implements MessageSender {
 
 	public ArrayList<String> getWho(String channel) {
 		return whoChannel.get(channel);
+	}
+
+	@Override
+	public String doGet(String target) throws MalformedURLException {
+		URL url;
+        StringBuilder toReturn = new StringBuilder();
+
+		try {
+			url = new URL(target);
+            BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
+            System.out.println("GET: "+url);
+            String nextRead = in.readLine();
+            while (nextRead != null) {
+            	toReturn.append(nextRead);
+            	nextRead = in.readLine();
+            	if (nextRead != null) {
+                	toReturn.append('\n');
+            	}
+            }
+            System.out.println("Info returned.");
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		return toReturn.toString();
 	}
 
 
